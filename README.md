@@ -4,8 +4,8 @@
 
 ## Инструкции за компилация и употреба
   - Навигирайте до папката, в която се намират файловете.
-  - В терминал изпълнете командата "javac MergeSortServer.java, MergeSortClient.java, MergeSortMultiClient.java"
-  - След това в два отделни терминала изпълнете "java MergeSortServer" и "java MergeSortMultiClient", за да стартирате сървъра и клиента.
+  - В терминал изпълнете командата "javac MergeSortServer.java, MergeSortClient.java
+  - След това в два отделни терминала изпълнете "java MergeSortServer" и "java MergeSortClient", за да стартирате сървъра и клиента.
   - Следвайте инструкциите от конзолата на клиента.
 
 ## Основни стъпки на разработка
