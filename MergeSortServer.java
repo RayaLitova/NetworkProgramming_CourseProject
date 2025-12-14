@@ -1,7 +1,122 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class MergeSortServer 
 {    
     private static final int THRESHOLD = 1000;
+    private static final int PORT = 8888;
+    private static int nextClientId = 1;
     
+    static class ClientHandler implements Runnable 
+    {
+        private Socket socket;
+        private int clientId;
+        private BufferedReader in;
+        private PrintWriter out;
+        
+        public ClientHandler(Socket socket, int clientId) 
+        {
+            this.socket = socket;
+            this.clientId = clientId;
+        }
+        
+        @Override
+        public void run() {
+            try {
+                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                out = new PrintWriter(socket.getOutputStream(), true);
+                System.out.println("Assigned Client ID: " + clientId);
+                out.println("CLIENT_ID:" + clientId);
+                
+                String request;
+                while ((request = in.readLine()) != null) {
+                    handleRequest(request);
+                }
+                
+            } 
+            catch (IOException e) 
+            {
+                System.out.println("Client " + clientId + " dropped connection.");
+            }
+            finally 
+            {
+                try 
+                {
+                    socket.close();
+                } 
+                catch (IOException e) 
+                {
+                    e.printStackTrace();
+                }
+            }
+        }
+        
+        private void handleRequest(String request) 
+        {
+            String[] parts = request.split(":");
+            String command = parts[0];
+            switch (command) {
+                case "SORT_REQUEST":
+                    String[] sortReqParts = parts[1].split(";");
+                    sort(Integer.parseInt(sortReqParts[0]), sortReqParts[1]);
+                    break;
+                case "TEST_SPEEDUP":
+                    String[] testReqParts = parts[1].split(";");
+                    test_speedup(Integer.parseInt(testReqParts[0]), testReqParts[1]);
+                    break;
+                case "DONE":
+                    System.out.println("Client " + clientId + " finished work.");
+                    out.println("ACK");
+                    break;
+            }
+        }
+        
+        private synchronized void sort(int depth, String array_data) 
+        {
+            String[] strNumbers = array_data.split(",");
+            int[] arr = new int[strNumbers.length];
+            for (int i = 0; i < strNumbers.length; i++)
+                arr[i] = Integer.parseInt(strNumbers[i]);
+
+            if (depth == -1)
+                depth = (int) (Math.log(Runtime.getRuntime().availableProcessors()) / Math.log(2));
+
+            parallelMergeSort(arr, 0, arr.length - 1, depth);
+            out.println("SORT_COMPLETE:" + formatArray(arr));
+        }
+
+        private synchronized void test_speedup(int depth, String data) 
+        {
+            String[] strNumbers = data.split(",");
+            int[] arr = new int[strNumbers.length];
+            for (int i = 0; i < strNumbers.length; i++)
+                arr[i] = Integer.parseInt(strNumbers[i]);
+            
+            long seqTime = RunSequential(Arrays.copyOf(arr, arr.length));
+            long parTime = RunParallel(arr, depth);
+            out.println("TEST_SPEEDUP_COMPLETE:" + formatArray(arr) + 
+                                ";" + seqTime + ";" + parTime + ";" + 
+                                String.format("%.2f", (double)seqTime / parTime)
+            );
+        }
+    }
+
+    private static String formatArray(int[] arr) 
+    {
+        return String.join(",", 
+                    Arrays.stream(arr)
+                        .mapToObj(String::valueOf)
+                        .toArray(String[]::new)
+                    );
+    }
+
     public static void sequentialMergeSort(int[] arr, int left, int right) 
     {
         if (left < right) 
@@ -84,35 +199,38 @@ public class MergeSortServer
         return System.currentTimeMillis() - start1;
     }
 
-    private static long RunParallel(int[] arr)
+    private static long RunParallel(int[] arr, int depth)
     {
         long start2 = System.currentTimeMillis();
-        int depth = (int) (Math.log(Runtime.getRuntime().availableProcessors()) / Math.log(2));
+        if (depth == -1)
+            depth = (int) (Math.log(Runtime.getRuntime().availableProcessors()) / Math.log(2));
         parallelMergeSort(arr, 0, arr.length - 1, depth);
         return System.currentTimeMillis() - start2;
     }
     
     public static void main(String[] args) 
     {
-        int[] sizes = { (int)Math.pow(10, 4), 
-                        (int)Math.pow(10, 5), 
-                        (int)Math.pow(10, 6), 
-                        (int)Math.pow(10, 7)};
+        System.out.println("Server started " + PORT);
         
-        for (int size : sizes) {
-            System.out.println("\nSize: " + size);
-            
-            int[] arr = new int[size];
-            for (int i = 0; i < size; i++)
-                arr[i] = (int) (Math.random() * 10000);
-            
-            long timeSeq = RunSequential(arr.clone());
-            System.out.println("Sequential: " + timeSeq + " ms");
-            
-            long timePar = RunParallel(arr.clone());
-            System.out.println("Parallel: " + timePar + " ms");
-
-            System.out.printf("Speedup: %.2fx\n", (double)timeSeq / timePar);
+        ExecutorService executor = Executors.newCachedThreadPool();
+        
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) 
+        {
+            while (true) 
+            {
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("New client: " + clientSocket.getInetAddress());
+                
+                executor.submit(new ClientHandler(clientSocket, nextClientId++));
+            }
+        } 
+        catch (IOException e) 
+        {
+            e.printStackTrace();
+        } 
+        finally 
+        {
+            executor.shutdown();
         }
     }
 }
