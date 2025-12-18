@@ -51,15 +51,15 @@ public class MergeSortClient
         return true;
     }
     
-    public void requestWork(String cmd, String depth, int size) throws IOException 
+    public void requestWork(String cmd, int size) throws IOException 
     {
         int[] arr = generateRandomArray(size);
         switch (cmd) {
             case "sort":
-                out.println("SORT_REQUEST:" + depth + ";" + formatArray(arr));
+                out.println("SORT_REQUEST:" + formatArray(arr));
                 break;
             case "test_sort":
-                out.println("TEST_SPEEDUP:" + depth + ";" + formatArray(arr));
+                out.println("TEST_SPEEDUP:" + formatArray(arr));
                 break;
             default:
                 return;
@@ -70,7 +70,10 @@ public class MergeSortClient
         
         if (parts[0].equals("SORT_COMPLETE")) 
         {
-            System.out.println("Sort result: " + (isSorted(parts[1]) ? "Sorted" : "Unsorted"));
+            if (parseArray(parts[1]).length <= 20)
+                System.out.println("Sorted array: " + parts[1]);
+            else
+                System.out.println("Sort result: " + (isSorted(parts[1]) ? "Sorted" : "Unsorted"));
         } 
         else if (parts[0].equals("TEST_SPEEDUP_COMPLETE")) 
         {
@@ -138,15 +141,12 @@ public class MergeSortClient
 
                     System.out.print("Enter command (sort, test_sort, done): ");
                     String cmd = sc.nextLine().toLowerCase();
-
-                    System.out.print("Number of threads (-1 for maximum): ");
-                    String depthStr = sc.nextLine();
                     
                     System.out.print("Size of generated array: ");
                     String arrSizeStr = sc.nextLine();
                     sc.close();
 
-                    client.requestWork(cmd, depthStr, Integer.parseInt(arrSizeStr));
+                    client.requestWork(cmd, Integer.parseInt(arrSizeStr));
                     client.notifyDone();
                     
                     Thread.sleep(3000);
